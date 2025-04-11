@@ -1,11 +1,7 @@
 from flask import Flask, request, render_template_string
-from PIL import Image
-import pytesseract
-import io
-import requests
-from bs4 import BeautifulSoup
-import os
 import openai
+import os
+import base64
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
@@ -14,7 +10,7 @@ app = Flask(__name__)
 HTML_PAGE = """<!doctype html>
 <html>
 <head>
-    <title>Bookshelf OCR Scanner</title>
+    <title>Bookshelf OCR with GPT-4-Vision</title>
     <style>
         body { font-family: Arial; padding: 40px; }
         input[type=file] { margin: 20px 0; }
@@ -23,7 +19,7 @@ HTML_PAGE = """<!doctype html>
     </style>
 </head>
 <body>
-    <h1>📚 Bookshelf OCR</h1>
+    <h1>📚 GPT-4 Vision Bookshelf Scanner</h1>
     <p>Upload a photo of book spines and get book titles with Amazon links.</p>
     <form method="post" enctype="multipart/form-data" action="/upload">
         <input type="file" name="image" accept="image/*" required>
@@ -33,29 +29,33 @@ HTML_PAGE = """<!doctype html>
 </body>
 </html>"""
 
-# --- OCR Text Extraction ---
-def extract_books_from_image(image_bytes):
-    image = Image.open(io.BytesIO(image_bytes))
-    text = pytesseract.image_to_string(image)
-    lines = [line.strip() for line in text.split('\n') if line.strip()]
-    return lines
+def extract_books_from_image_gpt4(image_bytes):
+    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+    image_url = f"data:image/jpeg;base64,{image_base64}"
 
-# --- AI Cleanup ---
-def clean_book_list_with_ai(raw_lines):
-    prompt = "Extract book titles and authors from the following OCR results:\n\n" + "\n".join(raw_lines) + "\n\nFormat: Title - Author"
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
+            model="gpt-4-vision-preview",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "From this bookshelf photo, extract a list of book titles and their authors. Format like this: 'Title - Author' per line."},
+                        {"type": "image_url", "image_url": {"url": image_url}}
+                    ]
+                }
+            ],
+            max_tokens=1000,
         )
         cleaned_text = response.choices[0].message["content"]
         return [line.strip() for line in cleaned_text.split("\n") if line.strip()]
     except Exception as e:
-        return [f"Error during AI cleanup: {e}"]
+        return [f"Error during GPT-4 Vision processing: {e}"]
 
-# --- Amazon Search Link ---
 def search_amazon_links(query):
+    import requests
+    from bs4 import BeautifulSoup
+
     search_url = f"https://www.amazon.com/s?k={requests.utils.quote(query)}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     response = requests.get(search_url, headers=headers)
@@ -65,7 +65,6 @@ def search_amazon_links(query):
         return f"https://www.amazon.com{result['href']}"
     return None
 
-# --- Web Routes ---
 @app.route('/')
 def index():
     return render_template_string(HTML_PAGE)
@@ -75,9 +74,8 @@ def upload_image():
     if 'image' not in request.files:
         return 'No image uploaded', 400
 
-    image = request.files['image'].read()
-    raw_lines = extract_books_from_image(image)
-    lines = clean_book_list_with_ai(raw_lines)
+    image_bytes = request.files['image'].read()
+    lines = extract_books_from_image_gpt4(image_bytes)
 
     results = []
     for line in lines:

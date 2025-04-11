@@ -1,6 +1,4 @@
 flask
-pytesseract
-pillow
+openai
 requests
 beautifulsoup4
-openai==0.28
