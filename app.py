@@ -2,6 +2,8 @@ from flask import Flask, request, render_template_string
 import openai
 import os
 import base64
+import requests
+from bs4 import BeautifulSoup
 
 openai.api_key = os.environ.get("OPENAI_API_KEY")
 
@@ -53,16 +55,13 @@ def extract_books_from_image_gpt4(image_bytes):
         return [f"Error during GPT-4 Vision processing: {e}"]
 
 def search_amazon_links(query):
-    import requests
-    from bs4 import BeautifulSoup
-
-    search_url = f"https://www.amazon.com/s?k={requests.utils.quote(query)}"
+    search_url = f"https://www.google.com/search?q=site:amazon.com+{requests.utils.quote(query)}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     response = requests.get(search_url, headers=headers)
     soup = BeautifulSoup(response.text, 'html.parser')
-    result = soup.find('a', class_='a-link-normal s-no-outline')
-    if result and 'href' in result.attrs:
-        return f"https://www.amazon.com{result['href']}"
+    link = soup.find('a', href=True)
+    if link:
+        return link['href']
     return None
 
 @app.route('/')
