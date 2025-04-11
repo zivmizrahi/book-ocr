@@ -3,4 +3,4 @@ pytesseract
 pillow
 requests
 beautifulsoup4
-openai
+openai==0.28
