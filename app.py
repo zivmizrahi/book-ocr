@@ -35,7 +35,7 @@ def extract_books_from_image_gpt4(image_bytes):
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4-turbo",
             messages=[
                 {
                     "role": "user",
