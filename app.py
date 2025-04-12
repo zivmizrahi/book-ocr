@@ -55,6 +55,10 @@ def extract_books_from_image_gpt4(image_bytes):
         return [f"Error during GPT-4 Vision processing: {e}"]
 
 def search_amazon_links(query):
+    import requests
+    from bs4 import BeautifulSoup
+    from urllib.parse import unquote
+
     search_url = f"https://www.google.com/search?q=site:amazon.com+{requests.utils.quote(query)}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     response = requests.get(search_url, headers=headers)
@@ -63,23 +67,21 @@ def search_amazon_links(query):
     links = soup.find_all('a', href=True)
     for link in links:
         href = link['href']
-        if "amazon.com" in href and "/url?q=" in href:
-            real_url = href.split("/url?q=")[1].split("&")[0]
-
+        if "/url?q=" in href and "amazon.com" in href:
             try:
-                product_response = requests.get(real_url, headers=headers)
+                raw_url = href.split("/url?q=")[1].split("&")[0]
+                clean_url = unquote(raw_url)
+                product_response = requests.get(clean_url, headers=headers, timeout=10)
                 product_soup = BeautifulSoup(product_response.text, 'html.parser')
                 rating_span = product_soup.find('span', {'class': 'a-icon-alt'})
                 if rating_span:
-                    rating_text = rating_span.get_text(strip=True)
+                    rating = rating_span.get_text(strip=True)
                 else:
-                    rating_text = "⭐️ No rating"
+                    rating = "⭐️ No rating"
+                return clean_url, rating
             except Exception as e:
-                rating_text = f"⭐️ Rating error"
-
-            return real_url, rating_text
-
-    return None, "⭐️ No link found"
+                return clean_url, f"⭐️ Error fetching rating"
+    return None, "⭐️ No link found", "⭐️ No link found"
 
 @app.route('/')
 def index():
