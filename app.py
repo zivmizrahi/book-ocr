@@ -70,23 +70,20 @@ def search_amazon_links(query):
         for link in links:
             href = link['href']
             if "/url?q=" in href and "amazon.com" in href:
-                raw_url = href.split("/url?q=")[1].split("&")[0]
-                clean_url = unquote(raw_url)
-
                 try:
+                    raw_url = href.split("/url?q=")[1].split("&")[0]
+                    clean_url = unquote(raw_url)
                     product_response = requests.get(clean_url, headers=headers, timeout=10)
                     product_soup = BeautifulSoup(product_response.text, 'html.parser')
                     rating_span = product_soup.find('span', {'class': 'a-icon-alt'})
                     rating = rating_span.get_text(strip=True) if rating_span else "⭐️ No rating"
+                    return clean_url, rating
                 except Exception:
-                    rating = "⭐️ Error fetching rating"
-
-                return clean_url, rating
-
+                    return raw_url if 'raw_url' in locals() else None, "⭐️ Error fetching rating"
     except Exception:
-        pass
+        return None, "⭐️ Search error"
 
-    return None, "⭐️ No link found", "⭐️ No link found", "⭐️ No link found"
+    return None, "⭐️ No link found", "⭐️ No link found", "⭐️ No link found", "⭐️ No link found"
 
 @app.route('/')
 def index():
