@@ -55,13 +55,19 @@ def extract_books_from_image_gpt4(image_bytes):
         return [f"Error during GPT-4 Vision processing: {e}"]
 
 def search_amazon_links(query):
+    import requests
+    from bs4 import BeautifulSoup
+    from urllib.parse import urlparse, parse_qs
+
     search_url = f"https://www.google.com/search?q=site:amazon.com+{requests.utils.quote(query)}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     response = requests.get(search_url, headers=headers)
     soup = BeautifulSoup(response.text, 'html.parser')
     link = soup.find('a', href=True)
-    if link:
-        return link['href']
+
+    if link and "/url?q=" in link['href']:
+        real_url = link['href'].split("/url?q=")[1].split("&")[0]
+        return real_url
     return None
 
 @app.route('/')
