@@ -22,7 +22,7 @@ HTML_PAGE = """<!doctype html>
 </head>
 <body>
     <h1>📚 GPT-4 Vision Bookshelf Scanner</h1>
-    <p>Upload a photo of book spines and get book titles, ratings, and Amazon links.</p>
+    <p>Upload a photo of book spines and get book titles with Amazon links.</p>
     <form method="post" enctype="multipart/form-data" action="/upload">
         <input type="file" name="image" accept="image/*" required>
         <br>
@@ -55,35 +55,17 @@ def extract_books_from_image_gpt4(image_bytes):
         return [f"Error during GPT-4 Vision processing: {e}"]
 
 def search_amazon_links(query):
-    import requests
-    from bs4 import BeautifulSoup
-    from urllib.parse import unquote
-
     search_url = f"https://www.google.com/search?q=site:amazon.com+{requests.utils.quote(query)}"
     headers = {'User-Agent': 'Mozilla/5.0'}
-
-    try:
-        response = requests.get(search_url, headers=headers)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        links = soup.find_all('a', href=True)
-
-        for link in links:
-            href = link['href']
-            if "/url?q=" in href and "amazon.com" in href:
-                try:
-                    raw_url = href.split("/url?q=")[1].split("&")[0]
-                    clean_url = unquote(raw_url)
-                    product_response = requests.get(clean_url, headers=headers, timeout=10)
-                    product_soup = BeautifulSoup(product_response.text, 'html.parser')
-                    rating_span = product_soup.find('span', {'class': 'a-icon-alt'})
-                    rating = rating_span.get_text(strip=True) if rating_span else "⭐️ No rating"
-                    return clean_url, rating
-                except Exception:
-                    return raw_url if 'raw_url' in locals() else None, "⭐️ Error fetching rating"
-    except Exception:
-        return None, "⭐️ Search error"
-
-    return None, "⭐️ No link found", "⭐️ No link found", "⭐️ No link found", "⭐️ No link found"
+    response = requests.get(search_url, headers=headers)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    links = soup.find_all('a', href=True)
+    for link in links:
+        href = link['href']
+        if "amazon.com" in href and "/url?q=" in href:
+            real_url = href.split("/url?q=")[1].split("&")[0]
+            return real_url
+    return None
 
 @app.route('/')
 def index():
@@ -99,14 +81,13 @@ def upload_image():
 
     results = []
     for line in lines:
-        link, rating = search_amazon_links(line)
-        results.append({'text': line, 'amazon_link': link, 'rating': rating})
+        link = search_amazon_links(line)
+        results.append({'text': line, 'amazon_link': link})
 
     result_html = '<h1>Results</h1>'
     for r in results:
         result_html += '<div class="book">'
         result_html += f"<strong>{r['text']}</strong><br>"
-        result_html += f"{r['rating']}<br>"
         if r['amazon_link']:
             result_html += f"<a href='{r['amazon_link']}' target='_blank'>View on Amazon</a>"
         else:
