@@ -61,27 +61,32 @@ def search_amazon_links(query):
 
     search_url = f"https://www.google.com/search?q=site:amazon.com+{requests.utils.quote(query)}"
     headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(search_url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
 
-    links = soup.find_all('a', href=True)
-    for link in links:
-        href = link['href']
-        if "/url?q=" in href and "amazon.com" in href:
-            try:
+    try:
+        response = requests.get(search_url, headers=headers)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        links = soup.find_all('a', href=True)
+
+        for link in links:
+            href = link['href']
+            if "/url?q=" in href and "amazon.com" in href:
                 raw_url = href.split("/url?q=")[1].split("&")[0]
                 clean_url = unquote(raw_url)
-                product_response = requests.get(clean_url, headers=headers, timeout=10)
-                product_soup = BeautifulSoup(product_response.text, 'html.parser')
-                rating_span = product_soup.find('span', {'class': 'a-icon-alt'})
-                if rating_span:
-                    rating = rating_span.get_text(strip=True)
-                else:
-                    rating = "⭐️ No rating"
+
+                try:
+                    product_response = requests.get(clean_url, headers=headers, timeout=10)
+                    product_soup = BeautifulSoup(product_response.text, 'html.parser')
+                    rating_span = product_soup.find('span', {'class': 'a-icon-alt'})
+                    rating = rating_span.get_text(strip=True) if rating_span else "⭐️ No rating"
+                except Exception:
+                    rating = "⭐️ Error fetching rating"
+
                 return clean_url, rating
-            except Exception as e:
-                return clean_url, f"⭐️ Error fetching rating"
-    return None, "⭐️ No link found", "⭐️ No link found"
+
+    except Exception:
+        pass
+
+    return None, "⭐️ No link found", "⭐️ No link found", "⭐️ No link found"
 
 @app.route('/')
 def index():
