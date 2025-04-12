@@ -22,7 +22,7 @@ HTML_PAGE = """<!doctype html>
 </head>
 <body>
     <h1>📚 GPT-4 Vision Bookshelf Scanner</h1>
-    <p>Upload a photo of book spines and get book titles with Amazon links.</p>
+    <p>Upload a photo of book spines and get book titles, ratings, and Amazon links.</p>
     <form method="post" enctype="multipart/form-data" action="/upload">
         <input type="file" name="image" accept="image/*" required>
         <br>
@@ -55,20 +55,31 @@ def extract_books_from_image_gpt4(image_bytes):
         return [f"Error during GPT-4 Vision processing: {e}"]
 
 def search_amazon_links(query):
-    import requests
-    from bs4 import BeautifulSoup
-    from urllib.parse import urlparse, parse_qs
-
     search_url = f"https://www.google.com/search?q=site:amazon.com+{requests.utils.quote(query)}"
     headers = {'User-Agent': 'Mozilla/5.0'}
     response = requests.get(search_url, headers=headers)
     soup = BeautifulSoup(response.text, 'html.parser')
-    link = soup.find('a', href=True)
 
-    if link and "/url?q=" in link['href']:
-        real_url = link['href'].split("/url?q=")[1].split("&")[0]
-        return real_url
-    return None
+    links = soup.find_all('a', href=True)
+    for link in links:
+        href = link['href']
+        if "amazon.com" in href and "/url?q=" in href:
+            real_url = href.split("/url?q=")[1].split("&")[0]
+
+            try:
+                product_response = requests.get(real_url, headers=headers)
+                product_soup = BeautifulSoup(product_response.text, 'html.parser')
+                rating_span = product_soup.find('span', {'class': 'a-icon-alt'})
+                if rating_span:
+                    rating_text = rating_span.get_text(strip=True)
+                else:
+                    rating_text = "⭐️ No rating"
+            except Exception as e:
+                rating_text = f"⭐️ Rating error"
+
+            return real_url, rating_text
+
+    return None, "⭐️ No link found"
 
 @app.route('/')
 def index():
@@ -84,13 +95,14 @@ def upload_image():
 
     results = []
     for line in lines:
-        link = search_amazon_links(line)
-        results.append({'text': line, 'amazon_link': link})
+        link, rating = search_amazon_links(line)
+        results.append({'text': line, 'amazon_link': link, 'rating': rating})
 
     result_html = '<h1>Results</h1>'
     for r in results:
         result_html += '<div class="book">'
         result_html += f"<strong>{r['text']}</strong><br>"
+        result_html += f"{r['rating']}<br>"
         if r['amazon_link']:
             result_html += f"<a href='{r['amazon_link']}' target='_blank'>View on Amazon</a>"
         else:
